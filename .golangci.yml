@@ -1,0 +1,26 @@
+version: "2"
+run:
+  timeout: 5m
+  tests: false
+linters:
+  default: all
+  disable:
+    - depguard
+    - nlreturn
+    - wsl
+  exclusions:
+    generated: lax
+    warn-unused: true
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
