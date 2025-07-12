@@ -2,6 +2,7 @@
 package main
 
 import (
+	"io"
 	"log"
 	"net/http"
 
@@ -15,6 +16,10 @@ func main() {
 	router.Get("/{$}", page)
 	router.Post("/hello", hello)
 	router.HandleFunc("GET /junk", junk)
+	router.Static("/pages/", "static")
+	router.Static("/world", "static")
+	router.ServeFile("/junk.txt", "static/hello.txt")
+	router.All("/", notFound)
 	group1 := router.Group("/extra")
 	group1.Use(extra)
 	group1.All("/junk", junk)
@@ -26,17 +31,23 @@ func main() {
 	router.Run(":8080")
 }
 
+func notFound(w http.ResponseWriter, _ *http.Request) {
+	log.Println("not found handlers")
+	w.WriteHeader(http.StatusNotFound)
+	io.WriteString(w, "This is not the page you are looking for ... \nGo about your business")
+}
+
 func page(w http.ResponseWriter, _ *http.Request) {
 	log.Println("main page")
-	w.Write([]byte("main page")) //nolint:errcheck
+	w.Write([]byte("main page"))
 }
 
 func junk(w http.ResponseWriter, _ *http.Request) {
-	w.Write([]byte("junk page")) //nolint:errcheck
+	w.Write([]byte("junk page"))
 }
 
 func hello(w http.ResponseWriter, _ *http.Request) {
-	w.Write([]byte("hello world")) //nolint:errcheck
+	w.Write([]byte("hello world"))
 }
 
 func extra(next http.Handler) http.Handler {

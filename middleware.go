@@ -8,6 +8,7 @@ import (
 
 type statusRecorder struct {
 	http.ResponseWriter
+
 	status int
 }
 
@@ -19,7 +20,7 @@ func (rec *statusRecorder) WriteHeader(code int) {
 
 // Logger is a logging middleware that logs useragent, RemoteAddr, Method, Host, Path and response.Status to stdlib log.
 func Logger(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { //nolint: varnamelen
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println("logger middleware")
 		now := time.Now()
 		rec := statusRecorder{w, http.StatusOK}

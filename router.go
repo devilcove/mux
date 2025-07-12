@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -13,8 +14,9 @@ type Middleware func(http.Handler) http.Handler
 
 // Router provides a chain of middlewares and routes.
 type Router struct {
-	chain http.Handler
 	*http.ServeMux
+
+	chain http.Handler
 }
 
 // DefaultRouter creates a new Router using the default ServeMux.
@@ -89,9 +91,24 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	router.chain.ServeHTTP(w, r)
 }
 
+// Static registers the handle to serve static files.
+func (router *Router) Static(pattern, dir string) {
+	if !strings.HasSuffix(pattern, "/") {
+		pattern += "/"
+	}
+	router.Handle(pattern, http.StripPrefix(pattern, http.FileServer(http.Dir(dir))))
+}
+
+// ServeFile registers a ServeFile handler.
+func (router *Router) ServeFile(pattern, file string) {
+	router.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, file)
+	})
+}
+
 // Run starts the HTTP server and logs any error that occurs.
 func (router *Router) Run(addr string) {
-	server := http.Server{ //nolint:exhaustruct
+	server := http.Server{
 		Addr:              addr,
 		ReadHeaderTimeout: time.Second,
 		Handler:           router,

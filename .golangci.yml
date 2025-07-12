@@ -6,8 +6,22 @@ linters:
   default: all
   disable:
     - depguard
+    - noinlineerr
     - nlreturn
     - wsl
+    - wsl_v5
+  settings:
+    exhaustruct:
+      exclude:
+        - net/http.Server
+    varnamelen:
+      ignore-decls:
+        - w http.ResponseWriter
+        - r *http.Request
+    errcheck:
+      exclude-functions:
+        - io.WriteString
+        - (net/http.ResponseWriter).Write
   exclusions:
     generated: lax
     warn-unused: true

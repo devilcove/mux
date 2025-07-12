@@ -30,7 +30,7 @@ func main() {
 	r.Get("/articles/{id}", articleHandler)
 
 	// Serve static assets
-	r.Group("/static", static)
+	r.Static("/static", static)
 
 	r.Run(":8000")
 }
@@ -43,8 +43,3 @@ func articleHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	fmt.Fprintf(w, "Article ID: %s\n", id)
 }
-
-func static(next http.Handler) http.Handler {
-	return http.FileServer(http.Dir("static"))
-}
-```
