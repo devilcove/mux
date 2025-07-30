@@ -8,6 +8,7 @@ linters:
     - depguard
     - noinlineerr
     - nlreturn
+    - noctx
     - wsl
     - wsl_v5
   settings:
