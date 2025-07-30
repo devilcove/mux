@@ -3,7 +3,7 @@ package mux
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -15,6 +15,7 @@ type Middleware func(http.Handler) http.Handler
 // Router provides a chain of middlewares and routes.
 type Router struct {
 	*http.ServeMux
+	*slog.Logger
 
 	chain http.Handler
 }
@@ -24,6 +25,7 @@ func DefaultRouter() *Router {
 	mux := http.NewServeMux()
 	return &Router{
 		ServeMux: mux,
+		Logger:   slog.New(slog.DiscardHandler),
 		chain:    mux,
 	}
 }
@@ -33,6 +35,11 @@ func NewRouter(middleware ...Middleware) *Router {
 	r := DefaultRouter()
 	r.Use(middleware...)
 	return r
+}
+
+// SetLogger sets the slog.Logger for router.
+func (router *Router) SetLogger(l *slog.Logger) {
+	router.Logger = l
 }
 
 // Group creates a sub-router for the given prefix and applies middleware to it.
@@ -113,8 +120,8 @@ func (router *Router) Run(addr string) {
 		ReadHeaderTimeout: time.Second,
 		Handler:           router,
 	}
-	log.Printf("Starting server on %s\n", addr)
+	router.Info("Starting server:", "Address", addr)
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("Router.Run: failed to start server: %v", err)
+		router.Error("Router.Run: failed to start server: ", "error", err)
 	}
 }

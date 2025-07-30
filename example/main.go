@@ -4,6 +4,7 @@ package main
 import (
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/devilcove/mux"
@@ -13,6 +14,7 @@ func main() {
 	log.SetFlags(log.Lshortfile)
 	router := mux.NewRouter()
 	router.Use(mux.Logger)
+	router.SetLogger(slog.Default())
 	router.Get("/{$}", page)
 	router.Post("/hello", hello)
 	router.HandleFunc("GET /junk", junk)
