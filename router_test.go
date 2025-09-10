@@ -2,6 +2,7 @@ package mux
 
 import (
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,7 +36,7 @@ func TestMiddlewareExecution(t *testing.T) {
 		})
 	}
 
-	router := NewRouter(middleware, Logger)
+	router := NewRouter(slog.Default(), middleware, Logger)
 	router.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "pong")
 	})

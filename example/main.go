@@ -12,9 +12,8 @@ import (
 
 func main() {
 	log.SetFlags(log.Lshortfile)
-	router := mux.NewRouter()
+	router := mux.NewRouter(slog.Default())
 	router.Use(mux.Logger)
-	router.SetLogger(slog.Default())
 	router.Get("/{$}", page)
 	router.Post("/hello", hello)
 	router.HandleFunc("GET /junk", junk)

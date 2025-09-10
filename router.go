@@ -31,8 +31,11 @@ func DefaultRouter() *Router {
 }
 
 // NewRouter creates a new Router with the given middleware applied.
-func NewRouter(middleware ...Middleware) *Router {
+func NewRouter(l *slog.Logger, middleware ...Middleware) *Router {
 	r := DefaultRouter()
+	if l != nil {
+		r.Logger = l
+	}
 	r.Use(middleware...)
 	return r
 }

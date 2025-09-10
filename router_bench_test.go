@@ -35,7 +35,7 @@ func BenchmarkRouterBase(b *testing.B) {
 }
 
 func BenchmarkRouterWithOneMiddleware(b *testing.B) {
-	router := NewRouter(makeMiddleware("m1"))
+	router := NewRouter(nil, makeMiddleware("m1"))
 	router.HandleFunc("/bench", dummyHandler)
 
 	req := httptest.NewRequest("GET", "/bench", nil)
