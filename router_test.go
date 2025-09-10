@@ -334,3 +334,17 @@ func TestStaticFiles(t *testing.T) {
 		t.Error("wrong response", string(body))
 	}
 }
+
+func TestNotFound(t *testing.T) {
+	router := NewRouter(slog.Default(), Logger)
+	router.All("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		io.WriteString(w, "This is not the page you are looking for ... \nGo about your business")
+	})
+	req := httptest.NewRequest(http.MethodGet, "/testing", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Result().StatusCode != http.StatusNotFound {
+		t.Error("expected ", http.StatusNotFound, "got", w.Result().StatusCode)
+	}
+}
