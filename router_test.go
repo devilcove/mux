@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDefaultRouter(t *testing.T) {
@@ -42,7 +43,6 @@ func TestMiddlewareExecution(t *testing.T) {
 
 	buf := new(bytes.Buffer)
 	logger := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{}))
-	logger.Info("testing")
 	// NewLogger(logger)
 	router := NewRouter(logger, middleware, Logger)
 	router.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
@@ -252,5 +252,85 @@ func TestRouter_Patch(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "default router" {
 		t.Errorf("Expected 'default router', got '%s'", string(body))
+	}
+}
+
+func TestRouterRun(t *testing.T) {
+	buf := new(bytes.Buffer)
+	logger := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{}))
+	router := NewRouter(logger)
+	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "test response")
+	})
+
+	// start server
+	go router.Run(":8000")
+	time.Sleep(time.Millisecond * 10)
+	line, err := buf.ReadString(0x0a)
+	if err != nil {
+		t.Error("read log buffer", err)
+	}
+	if !strings.Contains(line, "Starting server:") {
+		t.Errorf("Expected 'Starting Server', got '%s'", buf)
+	}
+	line, err = buf.ReadString(0x0a)
+	if err == nil || line != "" {
+		t.Error("unexpected log message", line)
+	}
+
+	// start server again, should err with address already in use
+	router.Run(":8000")
+	line, err = buf.ReadString(0x0a)
+	if err != nil {
+		t.Error("read log buffer", err)
+	}
+	line, err = buf.ReadString(0x0a)
+	if err != nil {
+		t.Error("read log buffer", err)
+	}
+	if !strings.Contains(line, "failed to start server") {
+		t.Error("server started but should not have")
+	}
+}
+
+func TestStaticFiles(t *testing.T) {
+	router := DefaultRouter()
+	router.Static("/files", "example/static")
+	router.ServeFile("/hello", "example/static/hello.txt")
+
+	// get dir
+	req := httptest.NewRequest("GET", "/files/", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	body, err := io.ReadAll(w.Result().Body)
+	if err != nil {
+		t.Error("error reading body", err)
+	}
+	if !strings.Contains(string(body), "hello.txt") {
+		t.Error("wrong response", string(body))
+	}
+
+	// get file from dir
+	req = httptest.NewRequest("GET", "/files/hello.txt", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	body, err = io.ReadAll(w.Result().Body)
+	if err != nil {
+		t.Error("error reading body", err)
+	}
+	if !strings.Contains(string(body), "hello world") {
+		t.Error("wrong response", string(body))
+	}
+
+	// get file directly
+	req = httptest.NewRequest("GET", "/hello", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	body, err = io.ReadAll(w.Result().Body)
+	if err != nil {
+		t.Error("error reading body", err)
+	}
+	if !strings.Contains(string(body), "hello world") {
+		t.Error("wrong response", string(body))
 	}
 }
