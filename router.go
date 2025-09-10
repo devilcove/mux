@@ -33,13 +33,13 @@ func DefaultRouter() *Router {
 
 // NewRouter creates a new Router with the given middleware applied.
 func NewRouter(l *slog.Logger, middleware ...Middleware) *Router {
-	r := DefaultRouter()
+	router := DefaultRouter()
 	if l != nil {
-		r.Logger = l
+		router.Logger = l
 		logger = l
 	}
-	r.Use(middleware...)
-	return r
+	router.Use(middleware...)
+	return router
 }
 
 // Group creates a sub-router for the given prefix and applies middleware to it.
