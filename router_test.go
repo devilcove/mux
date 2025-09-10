@@ -1,10 +1,12 @@
 package mux
 
 import (
+	"bytes"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +30,8 @@ func TestDefaultRouter(t *testing.T) {
 
 func TestMiddlewareExecution(t *testing.T) {
 	called := false
+	expectedLog := "GET example.com /ping 192.0.2.1"
+	expectedForwardedLog := "GET example.com /ping 192.168.0.1"
 
 	middleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,12 +40,17 @@ func TestMiddlewareExecution(t *testing.T) {
 		})
 	}
 
-	router := NewRouter(slog.Default(), middleware, Logger)
+	buf := new(bytes.Buffer)
+	logger := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{}))
+	logger.Info("testing")
+	// NewLogger(logger)
+	router := NewRouter(logger, middleware, Logger)
 	router.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "pong")
 	})
 
 	req := httptest.NewRequest("GET", "/ping", nil)
+	req.Header.Set("User-Agent", "Go-Test")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -53,6 +62,20 @@ func TestMiddlewareExecution(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "pong" {
 		t.Errorf("Expected 'pong', got '%s'", string(body))
+	}
+	if !strings.Contains(buf.String(), expectedLog) {
+		t.Errorf("Expected '%s', got '%s'", expectedLog, buf.String())
+	}
+
+	req.Header.Set("X-Forwarded-For", "192.168.0.1")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	body, _ = io.ReadAll(w.Result().Body)
+	if string(body) != "pong" {
+		t.Errorf("Expected 'pong', got '%s'", string(body))
+	}
+	if !strings.Contains(buf.String(), expectedForwardedLog) {
+		t.Errorf("Expected '%s', got '%s'", expectedLog, buf.String())
 	}
 }
 

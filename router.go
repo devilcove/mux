@@ -22,10 +22,11 @@ type Router struct {
 
 // DefaultRouter creates a new Router using the default ServeMux.
 func DefaultRouter() *Router {
+	logger = slog.New(slog.DiscardHandler)
 	mux := http.NewServeMux()
 	return &Router{
 		ServeMux: mux,
-		Logger:   slog.New(slog.DiscardHandler),
+		Logger:   logger,
 		chain:    mux,
 	}
 }
@@ -35,14 +36,10 @@ func NewRouter(l *slog.Logger, middleware ...Middleware) *Router {
 	r := DefaultRouter()
 	if l != nil {
 		r.Logger = l
+		logger = l
 	}
 	r.Use(middleware...)
 	return r
-}
-
-// SetLogger sets the slog.Logger for router.
-func (router *Router) SetLogger(l *slog.Logger) {
-	router.Logger = l
 }
 
 // Group creates a sub-router for the given prefix and applies middleware to it.

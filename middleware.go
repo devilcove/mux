@@ -1,11 +1,14 @@
 package mux
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 )
+
+var logger *slog.Logger
 
 type statusRecorder struct {
 	http.ResponseWriter
@@ -29,6 +32,8 @@ func Logger(next http.Handler) http.Handler {
 		if r.Header.Get("X-Forwarded-For") != "" {
 			remote = r.Header.Get("X-Forwarded-For")
 		}
-		log.Println(r.Method, r.Host, r.URL.Path, remote, rec.status, time.Since(now), r.UserAgent())
+		details := fmt.Sprintf("%s %s %s %s %d %s %s",
+			r.Method, r.Host, r.URL.Path, remote, rec.status, time.Since(now).String(), r.UserAgent())
+		logger.Info(details)
 	})
 }

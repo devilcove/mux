@@ -6,6 +6,7 @@ linters:
   default: all
   disable:
     - depguard
+    - gochecknoglobals
     - noinlineerr
     - nlreturn
     - noctx
