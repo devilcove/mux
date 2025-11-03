@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 )
@@ -17,18 +18,49 @@ type Router struct {
 	*http.ServeMux
 	*slog.Logger
 
-	chain http.Handler
+	chain      http.Handler
+	methods    []string
+	notFound   func(http.ResponseWriter, *http.Request)
+	notAllowed func(http.ResponseWriter, string, int)
 }
 
 // DefaultRouter creates a new Router using the default ServeMux.
 func DefaultRouter() *Router {
-	logger = slog.New(slog.DiscardHandler)
 	mux := http.NewServeMux()
-	return &Router{
-		ServeMux: mux,
-		Logger:   logger,
-		chain:    mux,
+	router := &Router{
+		ServeMux:   mux,
+		Logger:     slog.New(slog.DiscardHandler),
+		chain:      mux,
+		methods:    []string{},
+		notFound:   http.NotFound,
+		notAllowed: http.Error,
 	}
+	// set up
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		method := r.Method
+		_, current := mux.Handler(r)
+		var allowed []string
+		for _, method := range router.methods {
+			// If we find a pattern that's different from the pattern for the
+			// current fallback handler then we know there are actually other handlers
+			// that could match with a method change, so we should handle as
+			// method not allowed
+			r.Method = method
+			if _, pattern := mux.Handler(r); pattern != current {
+				allowed = append(allowed, method)
+			}
+		}
+		r.Method = method
+		if len(allowed) != 0 {
+			w.Header().Set("Allow", strings.Join(allowed, ", "))
+			router.notAllowed(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			// http.Error(w, "Custom Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		// http.Error(w, "Custom Not Found", http.StatusNotFound)
+		router.notFound(w, r)
+	})
+	return router
 }
 
 // NewRouter creates a new Router with the given middleware applied.
@@ -42,6 +74,18 @@ func NewRouter(l *slog.Logger, middleware ...Middleware) *Router {
 	return router
 }
 
+// NotFound sets a custome not found handler.
+func (router *Router) NotFound(h func(http.ResponseWriter, *http.Request)) *Router {
+	router.notFound = http.HandlerFunc(h)
+	return router
+}
+
+// NotAllowed sets a custom method not allowed error.
+func (router *Router) NotAllowed(h func(http.ResponseWriter, string, int)) *Router {
+	router.notAllowed = h
+	return router
+}
+
 // Group creates a sub-router for the given prefix and applies middleware to it.
 func (router *Router) Group(prefix string, middlewares ...Middleware) *Router {
 	for _, m := range middlewares {
@@ -51,6 +95,9 @@ func (router *Router) Group(prefix string, middlewares ...Middleware) *Router {
 	}
 
 	subRouter := DefaultRouter()
+	subRouter.notFound = router.notFound
+	subRouter.notAllowed = router.notAllowed
+	subRouter.Logger = router.Logger
 	subRouter.Use(middlewares...)
 	router.Handle(prefix+"/", http.StripPrefix(prefix, subRouter))
 	return subRouter
@@ -65,32 +112,48 @@ func (router *Router) Use(middlewares ...Middleware) {
 
 // All registers the handler for all methods on given pattern.
 func (router *Router) All(pattern string, handler http.HandlerFunc) {
+	methods := allMethods()
+	for _, method := range methods {
+		router.addMethod(method)
+	}
 	router.HandleFunc(pattern, handler)
 }
 
 // Post registers the handler for post requests on given pattern.
 func (router *Router) Post(pattern string, handler http.HandlerFunc) {
-	router.HandleFunc("POST\t"+pattern, handler)
+	router.addMethod(http.MethodPost)
+	router.HandleFunc(http.MethodPost+"\t"+pattern, handler)
 }
 
 // Get registers the handler for get requests on given pattern.
 func (router *Router) Get(pattern string, handler http.HandlerFunc) {
-	router.HandleFunc("GET\t"+pattern, handler)
+	router.addMethod(http.MethodGet)
+	router.addMethod(http.MethodHead)
+	router.HandleFunc(http.MethodGet+"\t"+pattern, handler)
 }
 
 // Delete registers the handler for delete requests on given pattern.
 func (router *Router) Delete(pattern string, handler http.HandlerFunc) {
-	router.HandleFunc("DELETE\t"+pattern, handler)
+	router.addMethod(http.MethodDelete)
+	router.HandleFunc(http.MethodDelete+"\t"+pattern, handler)
 }
 
 // Put registers the handler for Put requests on given pattern.
 func (router *Router) Put(pattern string, handler http.HandlerFunc) {
-	router.HandleFunc("PUT\t"+pattern, handler)
+	router.addMethod(http.MethodPut)
+	router.HandleFunc(http.MethodPut+"\t"+pattern, handler)
 }
 
-// Delete registers the handler for patch requests on given pattern.
+// Patch registers the handler for patch requests on given pattern.
 func (router *Router) Patch(pattern string, handler http.HandlerFunc) {
-	router.HandleFunc("PATCH\t"+pattern, handler)
+	router.addMethod(http.MethodPatch)
+	router.HandleFunc(http.MethodPatch+"\t"+pattern, handler)
+}
+
+// CustomMethod registers a handler for a custom method request.
+func (router *Router) CustomMethod(method, pattern string, handle http.HandlerFunc) {
+	router.addMethod(method)
+	router.HandleFunc(method+"\t"+pattern, handle)
 }
 
 // ServeHTTP implements the http.Handler interface.
@@ -123,5 +186,18 @@ func (router *Router) Run(addr string) {
 	router.Info("Starting server:", "Address", addr)
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		router.Error("Router.Run: failed to start server: ", "error", err)
+	}
+}
+
+func (router *Router) addMethod(method string) {
+	if !slices.Contains(router.methods, method) {
+		router.methods = append(router.methods, method)
+	}
+}
+
+func allMethods() []string {
+	return []string{
+		http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
+		http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
 	}
 }

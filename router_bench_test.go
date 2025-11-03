@@ -2,6 +2,7 @@ package mux
 
 import (
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,8 +29,23 @@ func BenchmarkRouterBase(b *testing.B) {
 	req := httptest.NewRequest("GET", "/bench", nil)
 	w := httptest.NewRecorder()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
+		router.ServeHTTP(w, req)
+	}
+}
+
+func Benchmark5Routes(b *testing.B) {
+	router := DefaultRouter()
+	router.HandleFunc("/bench1", dummyHandler)
+	router.HandleFunc("/bench2", dummyHandler)
+	router.HandleFunc("/bench3", dummyHandler)
+	router.HandleFunc("/bench4", dummyHandler)
+	router.HandleFunc("/bench5", dummyHandler)
+
+	req := httptest.NewRequest("GET", "/bench2", nil)
+	w := httptest.NewRecorder()
+
+	for b.Loop() {
 		router.ServeHTTP(w, req)
 	}
 }
@@ -41,8 +57,7 @@ func BenchmarkRouterWithOneMiddleware(b *testing.B) {
 	req := httptest.NewRequest("GET", "/bench", nil)
 	w := httptest.NewRecorder()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		router.ServeHTTP(w, req)
 	}
 }
@@ -61,7 +76,6 @@ func BenchmarkRouterWithFiveMiddlewares(b *testing.B) {
 	req := httptest.NewRequest("GET", "/bench", nil)
 	w := httptest.NewRecorder()
 
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		router.ServeHTTP(w, req)
 	}
@@ -76,8 +90,39 @@ func BenchmarkRouterGroup(b *testing.B) {
 	req := httptest.NewRequest("GET", "/api/bench", nil)
 	w := httptest.NewRecorder()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		mainRouter.ServeHTTP(w, req)
 	}
 }
+
+func BenchmarkLogginMiddleWare(b *testing.B) {
+	router := NewRouter(slog.New(slog.DiscardHandler), Logger)
+	router.HandleFunc("/bench", dummyHandler)
+	req := httptest.NewRequest(http.MethodGet, "/bench", nil)
+	w := httptest.NewRecorder()
+	for b.Loop() {
+		router.ServeHTTP(w, req)
+	}
+}
+
+// func BenchmarkNotFoundMiddleware(b *testing.B) {
+// 	router := NewRouter(slog.New(slog.DiscardHandler), NotFound)
+// 	router.HandleFunc("/bench", dummyHandler)
+// 	req := httptest.NewRequest(http.MethodGet, "/bench", nil)
+// 	w := httptest.NewRecorder()
+// 	b.ResetTimer()
+// 	for range b.N {
+// 		router.ServeHTTP(w, req)
+// 	}
+// }
+
+// func BenchmarkLoggingAndNotFoundMiddleware(b *testing.B) {
+// 	router := NewRouter(slog.New(slog.DiscardHandler), Logger, NotFound)
+// 	router.HandleFunc("/bench", dummyHandler)
+// 	req := httptest.NewRequest(http.MethodGet, "/bench", nil)
+// 	w := httptest.NewRecorder()
+// 	b.ResetTimer()
+// 	for range b.N {
+// 		router.ServeHTTP(w, req)
+// 	}
+// }

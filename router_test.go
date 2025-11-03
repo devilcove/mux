@@ -29,53 +29,54 @@ func TestDefaultRouter(t *testing.T) {
 	}
 }
 
+func TestLoggerMiddleware(t *testing.T) {
+	expectedLog := "DELETE example.com / 192.0.2.1 204"
+	expectedForwardedLog := "DELETE example.com / 192.168.0.1 204"
+	buf := new(bytes.Buffer)
+	logger := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{}))
+	router := NewRouter(logger, Logger)
+	router.Delete("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	req.Header.Set("User-Agent", "Go-Test")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if !strings.Contains(buf.String(), expectedLog) {
+		t.Errorf("Expected '%s', got '%s'", expectedLog, buf.String())
+	}
+	req.Header.Set("X-Forwarded-For", "192.168.0.1")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if !strings.Contains(buf.String(), expectedForwardedLog) {
+		t.Errorf("Expected '%s', got '%s'", expectedLog, buf.String())
+	}
+}
+
 func TestMiddlewareExecution(t *testing.T) {
 	called := false
-	expectedLog := "GET example.com /ping 192.0.2.1"
-	expectedForwardedLog := "GET example.com /ping 192.168.0.1"
-
 	middleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			called = true
 			next.ServeHTTP(w, r)
 		})
 	}
-
-	buf := new(bytes.Buffer)
-	logger := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{}))
-	// NewLogger(logger)
-	router := NewRouter(logger, middleware, Logger)
+	router := DefaultRouter()
+	router.Use(middleware)
 	router.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "pong")
 	})
-
 	req := httptest.NewRequest("GET", "/ping", nil)
 	req.Header.Set("User-Agent", "Go-Test")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	if !called {
 		t.Errorf("Middleware was not called")
 	}
-
 	resp := w.Result()
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "pong" {
 		t.Errorf("Expected 'pong', got '%s'", string(body))
-	}
-	if !strings.Contains(buf.String(), expectedLog) {
-		t.Errorf("Expected '%s', got '%s'", expectedLog, buf.String())
-	}
-
-	req.Header.Set("X-Forwarded-For", "192.168.0.1")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	body, _ = io.ReadAll(w.Result().Body)
-	if string(body) != "pong" {
-		t.Errorf("Expected 'pong', got '%s'", string(body))
-	}
-	if !strings.Contains(buf.String(), expectedForwardedLog) {
-		t.Errorf("Expected '%s', got '%s'", expectedLog, buf.String())
 	}
 }
 
@@ -122,14 +123,12 @@ func TestChainedMiddlewareOrder(t *testing.T) {
 	m1 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			trace = append(trace, "m1")
-			t.Log("m1")
 			next.ServeHTTP(w, r)
 		})
 	}
 	m2 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			trace = append(trace, "m2")
-			t.Log("m2")
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -139,7 +138,6 @@ func TestChainedMiddlewareOrder(t *testing.T) {
 
 	router.HandleFunc("/chain", func(w http.ResponseWriter, r *http.Request) {
 		trace = append(trace, "handler")
-		t.Log("handler")
 		io.WriteString(w, "done")
 	})
 
@@ -148,7 +146,6 @@ func TestChainedMiddlewareOrder(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	expected := []string{"m2", "m1", "handler"}
-	t.Log(trace)
 
 	for i, v := range expected {
 		if trace[i] != v {
@@ -335,16 +332,71 @@ func TestStaticFiles(t *testing.T) {
 	}
 }
 
-func TestNotFound(t *testing.T) {
-	router := NewRouter(slog.Default(), Logger)
-	router.All("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		io.WriteString(w, "This is not the page you are looking for ... \nGo about your business")
+func TestErrorHandling(t *testing.T) {
+	router := NewRouter(slog.Default()).NotAllowed(
+		func(w http.ResponseWriter, _ string, _ int) {
+			http.Error(w, "Custom Method Not Allowed", http.StatusMethodNotAllowed)
+		}).NotFound(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			io.WriteString(w, "Custom Not Found")
+		})
+	router.Post("/{$}", func(w http.ResponseWriter, _ *http.Request) {
+		io.WriteString(w, "hello")
 	})
-	req := httptest.NewRequest(http.MethodGet, "/testing", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
+	if w.Result().StatusCode != http.StatusMethodNotAllowed {
+		t.Error("expected", http.StatusMethodNotAllowed, "got", w.Result().StatusCode)
+	}
+	body, _ := io.ReadAll(w.Result().Body)
+	if string(body) != "Custom Method Not Allowed\n" {
+		t.Error("expected 'Custom Method Not Allowed' got", string(body))
+	}
+	req = httptest.NewRequest(http.MethodPost, "/", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Result().StatusCode != http.StatusOK {
+		t.Error("expected", http.StatusOK, "got", w.Result().StatusCode)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/notfound", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 	if w.Result().StatusCode != http.StatusNotFound {
-		t.Error("expected ", http.StatusNotFound, "got", w.Result().StatusCode)
+		t.Error("expected", http.StatusNotFound, "got", w.Result().StatusCode)
+	}
+	body, _ = io.ReadAll(w.Result().Body)
+	if string(body) != "Custom Not Found" {
+		t.Error("expected 'Custom Not Found' got", string(body))
+	}
+}
+
+func TestCustomMethod(t *testing.T) {
+	router := DefaultRouter()
+	router.CustomMethod("UPDATE", "/{$}", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "custom method handler")
+	})
+	req := httptest.NewRequest("UPDATE", "/", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Error("expected ", http.StatusOK, "got", resp.Status)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "custom method handler" {
+		t.Errorf("Expected 'custom method handler', got '%s'", string(body))
+	}
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	resp = w.Result()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Error("got", resp.Status, "expected", http.StatusMethodNotAllowed)
+	}
+	if resp.Header.Get("Allow") != "UPDATE" {
+		t.Error("allowed header got", resp.Header.Get("Allowed"), "expected UPDATE")
 	}
 }

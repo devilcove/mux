@@ -8,6 +8,8 @@ provides a clean, expressive way to route HTTP requests in Go applications.
 * Subrouters with shared conditions (prefix, middleware grouping)
 * Middleware support (CORS, auth, logging, etc.)
 * Static file serving and SPA-friendly routing
+* Custom 404 and 405 handlers
+* No dependencies
 ## Prerequisites
 go version 1.23
 ## Running
@@ -19,18 +21,19 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"io"
 
 	"github.com/devilcove/mux"
 )
 
 func main() {
-	r := mux.NewRouter()
+	r := mux.NewRouter(nil, middleware).NotFound(notFoundHandler).NotAllowed(notAllowedHandler)
 
 	r.Get("/{$}", homeHandler)
 	r.Get("/articles/{id}", articleHandler)
 
 	// Serve static assets
-	r.Static("/static", static)
+	r.Static("/static", "static")
 
 	r.Run(":8000")
 }
@@ -43,3 +46,22 @@ func articleHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	fmt.Fprintf(w, "Article ID: %s\n", id)
 }
+
+func middleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("X-tag", "true")
+        next.ServeHTTP(w, r)
+    })
+}
+
+func notFoundHandler(w http.ResponseWriter, _ *http.Request) {
+    w.WriteHeader(http.StatusNotFound)
+    io.WriteString(w, "custom not found")
+}
+
+func notAllowedHandler(w http.ResponseWriter, _ string, code int) {
+    w.WriteHeader(code)
+    io.WriteString(w, "Custom Method Not Allowed")
+}
+```
+
