@@ -3,6 +3,7 @@ package mux
 
 import (
 	"errors"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -169,10 +170,29 @@ func (router *Router) Static(pattern, dir string) {
 	router.Handle(pattern, http.StripPrefix(pattern, http.FileServer(http.Dir(dir))))
 }
 
+// StaticFS registers the handle to serve static files from FS filesystem.
+// ex.
+// //go:embded images
+// var content embed.FS
+// router.StaticFS("/images/", content) .
+func (router *Router) StaticFS(pattern string, fs fs.FS) {
+	if !strings.HasSuffix(pattern, "/") {
+		pattern += "/"
+	}
+	router.Handle(pattern, http.StripPrefix(pattern, http.FileServer(http.FS(fs))))
+}
+
 // ServeFile registers a ServeFile handler.
 func (router *Router) ServeFile(pattern, file string) {
 	router.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, file)
+	})
+}
+
+// ServeFileFS registers a ServeFileFS handler.
+func (router *Router) ServeFileFS(pattern, file string, fs fs.FS) {
+	router.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFileFS(w, r, fs, file)
 	})
 }
 

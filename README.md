@@ -11,7 +11,7 @@ provides a clean, expressive way to route HTTP requests in Go applications.
 * Custom 404 and 405 handlers
 * No dependencies
 ## Prerequisites
-go version 1.23
+go version 1.24
 ## Running
 
 Basic Example

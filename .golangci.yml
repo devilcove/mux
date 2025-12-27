@@ -33,9 +33,10 @@ linters:
     #  - std-error-handling
 formatters:
   enable:
-    - gci
-    - gofmt
     - gofumpt
-    - goimports
+    - golines
+  settings:
+    gofumpt:
+      extra-rules: true
   exclusions:
     generated: lax

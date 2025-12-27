@@ -2,6 +2,7 @@ package mux
 
 import (
 	"bytes"
+	"embed"
 	"io"
 	"log/slog"
 	"net/http"
@@ -330,6 +331,58 @@ func TestStaticFiles(t *testing.T) {
 	if !strings.Contains(string(body), "hello world") {
 		t.Error("wrong response", string(body))
 	}
+}
+
+//go:embed example
+var content embed.FS
+
+func TestStaticFilesFS(t *testing.T) {
+	router := DefaultRouter()
+	router.StaticFS("/files", content)
+	router.ServeFileFS("/hello/", "example/static/hello.txt", content)
+
+	// get dir
+	t.Run("getDir", func(t *testing.T) {
+	req := httptest.NewRequest("GET", "/files/", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	body, err := io.ReadAll(w.Result().Body)
+	if err != nil {
+		t.Error("error reading body", err)
+	}
+	if !strings.Contains(string(body), ">example/</a>") {
+		t.Error("wrong response", string(body))
+	}
+})
+
+	// get file from dir
+	t.Run("getFile", func(t *testing.T) {
+	req := httptest.NewRequest("GET", "/files/example/static/hello.txt", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	body, err := io.ReadAll(w.Result().Body)
+	if err != nil {
+		t.Error("error reading body", err)
+	}
+	if !strings.Contains(string(body), "hello world") {
+		t.Error("wrong response", string(body))
+	}
+})
+
+	// get file directly
+	t.Run("getFileDirect", func(t *testing.T) {
+	req := httptest.NewRequest("GET", "/hello/", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	body, err := io.ReadAll(w.Result().Body)
+	if err != nil {
+		t.Error("error reading body", err)
+	}
+	if !strings.Contains(string(body), "hello world") {
+		t.Error("wrong response", string(body))
+		t.Log(w.Result().Header)
+	}
+})
 }
 
 func TestErrorHandling(t *testing.T) {
