@@ -2,13 +2,12 @@ package mux
 
 import (
 	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-func dummyHandler(w http.ResponseWriter, r *http.Request) {
+func dummyHandler(w http.ResponseWriter, _ *http.Request) {
 	io.WriteString(w, "ok")
 }
 
@@ -23,10 +22,10 @@ func makeMiddleware(tag string) Middleware {
 }
 
 func BenchmarkRouterBase(b *testing.B) {
-	router := DefaultRouter()
+	router := defaultRouter()
 	router.HandleFunc("/bench", dummyHandler)
 
-	req := httptest.NewRequest("GET", "/bench", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bench", nil)
 	w := httptest.NewRecorder()
 
 	for b.Loop() {
@@ -35,14 +34,14 @@ func BenchmarkRouterBase(b *testing.B) {
 }
 
 func Benchmark5Routes(b *testing.B) {
-	router := DefaultRouter()
+	router := defaultRouter()
 	router.HandleFunc("/bench1", dummyHandler)
 	router.HandleFunc("/bench2", dummyHandler)
 	router.HandleFunc("/bench3", dummyHandler)
 	router.HandleFunc("/bench4", dummyHandler)
 	router.HandleFunc("/bench5", dummyHandler)
 
-	req := httptest.NewRequest("GET", "/bench2", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bench2", nil)
 	w := httptest.NewRecorder()
 
 	for b.Loop() {
@@ -51,10 +50,10 @@ func Benchmark5Routes(b *testing.B) {
 }
 
 func BenchmarkRouterWithOneMiddleware(b *testing.B) {
-	router := NewRouter(nil, makeMiddleware("m1"))
+	router := NewRouter(makeMiddleware("m1"))
 	router.HandleFunc("/bench", dummyHandler)
 
-	req := httptest.NewRequest("GET", "/bench", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bench", nil)
 	w := httptest.NewRecorder()
 
 	for b.Loop() {
@@ -63,7 +62,7 @@ func BenchmarkRouterWithOneMiddleware(b *testing.B) {
 }
 
 func BenchmarkRouterWithFiveMiddlewares(b *testing.B) {
-	router := DefaultRouter()
+	router := defaultRouter()
 	router.Use(
 		makeMiddleware("m1"),
 		makeMiddleware("m2"),
@@ -73,21 +72,21 @@ func BenchmarkRouterWithFiveMiddlewares(b *testing.B) {
 	)
 	router.HandleFunc("/bench", dummyHandler)
 
-	req := httptest.NewRequest("GET", "/bench", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bench", nil)
 	w := httptest.NewRecorder()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		router.ServeHTTP(w, req)
 	}
 }
 
 func BenchmarkRouterGroup(b *testing.B) {
-	mainRouter := DefaultRouter()
+	mainRouter := defaultRouter()
 	group := mainRouter.Group("/api", makeMiddleware("group"))
 
 	group.HandleFunc("/bench", dummyHandler)
 
-	req := httptest.NewRequest("GET", "/api/bench", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/bench", nil)
 	w := httptest.NewRecorder()
 
 	for b.Loop() {
@@ -96,7 +95,7 @@ func BenchmarkRouterGroup(b *testing.B) {
 }
 
 func BenchmarkLogginMiddleWare(b *testing.B) {
-	router := NewRouter(slog.New(slog.DiscardHandler), Logger)
+	router := NewRouter(Logger)
 	router.HandleFunc("/bench", dummyHandler)
 	req := httptest.NewRequest(http.MethodGet, "/bench", nil)
 	w := httptest.NewRecorder()

@@ -13,12 +13,12 @@ import (
 )
 
 func TestDefaultRouter(t *testing.T) {
-	router := DefaultRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	router := NewRouter()
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "default router")
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -31,12 +31,13 @@ func TestDefaultRouter(t *testing.T) {
 }
 
 func TestLoggerMiddleware(t *testing.T) {
-	expectedLog := "DELETE example.com / 192.0.2.1 204"
-	expectedForwardedLog := "DELETE example.com / 192.168.0.1 204"
+	expectedLog := "DELETE example.com/ 204 192.0.2.1"
+	expectedForwardedLog := "DELETE example.com/ 204 192.168.0.1"
 	buf := new(bytes.Buffer)
 	logger := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{}))
-	router := NewRouter(logger, Logger)
-	router.Delete("/", func(w http.ResponseWriter, r *http.Request) {
+	slog.SetDefault(logger)
+	router := NewRouter(Logger)
+	router.Delete("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
@@ -62,12 +63,12 @@ func TestMiddlewareExecution(t *testing.T) {
 			next.ServeHTTP(w, r)
 		})
 	}
-	router := DefaultRouter()
+	router := NewRouter()
 	router.Use(middleware)
-	router.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "pong")
 	})
-	req := httptest.NewRequest("GET", "/ping", nil)
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
 	req.Header.Set("User-Agent", "Go-Test")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -82,7 +83,7 @@ func TestMiddlewareExecution(t *testing.T) {
 }
 
 func TestGroupRouting(t *testing.T) {
-	router := DefaultRouter()
+	router := NewRouter()
 
 	subRouter := router.Group("/api", func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +96,7 @@ func TestGroupRouting(t *testing.T) {
 		io.WriteString(w, r.Header.Get("X-Group"))
 	})
 
-	req := httptest.NewRequest("GET", "/api/hello", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/hello", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -114,35 +115,35 @@ func TestNilMiddlewarePanic(t *testing.T) {
 		}
 	}()
 
-	router := DefaultRouter()
+	router := NewRouter()
 	router.Group("/should-panic", nil)
 }
 
 func TestChainedMiddlewareOrder(t *testing.T) {
 	var trace []string
 
-	m1 := func(next http.Handler) http.Handler {
+	mid1 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			trace = append(trace, "m1")
 			next.ServeHTTP(w, r)
 		})
 	}
-	m2 := func(next http.Handler) http.Handler {
+	mid2 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			trace = append(trace, "m2")
 			next.ServeHTTP(w, r)
 		})
 	}
 
-	router := DefaultRouter()
-	router.Use(m1, m2)
+	router := NewRouter()
+	router.Use(mid1, mid2)
 
-	router.HandleFunc("/chain", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/chain", func(w http.ResponseWriter, _ *http.Request) {
 		trace = append(trace, "handler")
 		io.WriteString(w, "done")
 	})
 
-	req := httptest.NewRequest("GET", "/chain", nil)
+	req := httptest.NewRequest(http.MethodGet, "/chain", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -156,11 +157,11 @@ func TestChainedMiddlewareOrder(t *testing.T) {
 }
 
 func TestRouter_All(t *testing.T) {
-	router := DefaultRouter()
-	router.All("/test", func(w http.ResponseWriter, r *http.Request) {
+	router := NewRouter()
+	router.All("/test", func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "default router")
 	})
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	resp := w.Result()
@@ -168,7 +169,7 @@ func TestRouter_All(t *testing.T) {
 	if string(body) != "default router" {
 		t.Errorf("Expected 'default router', got '%s'", string(body))
 	}
-	req = httptest.NewRequest("POST", "/test", nil)
+	req = httptest.NewRequest(http.MethodPost, "/test", nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	resp = w.Result()
@@ -179,8 +180,8 @@ func TestRouter_All(t *testing.T) {
 }
 
 func TestRouter_Get(t *testing.T) {
-	router := DefaultRouter()
-	router.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+	router := NewRouter()
+	router.Get("/test", func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "default router")
 	})
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -194,8 +195,8 @@ func TestRouter_Get(t *testing.T) {
 }
 
 func TestRouter_Post(t *testing.T) {
-	router := DefaultRouter()
-	router.Post("/test", func(w http.ResponseWriter, r *http.Request) {
+	router := NewRouter()
+	router.Post("/test", func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "default router")
 	})
 	req := httptest.NewRequest(http.MethodPost, "/test", nil)
@@ -209,8 +210,8 @@ func TestRouter_Post(t *testing.T) {
 }
 
 func TestRouter_Delete(t *testing.T) {
-	router := DefaultRouter()
-	router.Delete("/test", func(w http.ResponseWriter, r *http.Request) {
+	router := NewRouter()
+	router.Delete("/test", func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "default router")
 	})
 	req := httptest.NewRequest(http.MethodDelete, "/test", nil)
@@ -224,8 +225,8 @@ func TestRouter_Delete(t *testing.T) {
 }
 
 func TestRouter_Put(t *testing.T) {
-	router := DefaultRouter()
-	router.Put("/test", func(w http.ResponseWriter, r *http.Request) {
+	router := NewRouter()
+	router.Put("/test", func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "default router")
 	})
 	req := httptest.NewRequest(http.MethodPut, "/test", nil)
@@ -239,8 +240,8 @@ func TestRouter_Put(t *testing.T) {
 }
 
 func TestRouter_Patch(t *testing.T) {
-	router := DefaultRouter()
-	router.Patch("/test", func(w http.ResponseWriter, r *http.Request) {
+	router := NewRouter()
+	router.Patch("/test", func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "default router")
 	})
 	req := httptest.NewRequest(http.MethodPatch, "/test", nil)
@@ -256,8 +257,9 @@ func TestRouter_Patch(t *testing.T) {
 func TestRouterRun(t *testing.T) {
 	buf := new(bytes.Buffer)
 	logger := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{}))
-	router := NewRouter(logger)
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	slog.SetDefault(logger)
+	router := NewRouter()
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "test response")
 	})
 
@@ -278,7 +280,7 @@ func TestRouterRun(t *testing.T) {
 
 	// start server again, should err with address already in use
 	router.Run(":8000")
-	line, err = buf.ReadString(0x0a)
+	_, err = buf.ReadString(0x0a)
 	if err != nil {
 		t.Error("read log buffer", err)
 	}
@@ -292,12 +294,12 @@ func TestRouterRun(t *testing.T) {
 }
 
 func TestStaticFiles(t *testing.T) {
-	router := DefaultRouter()
+	router := NewRouter()
 	router.Static("/files", "example/static")
 	router.ServeFile("/hello", "example/static/hello.txt")
 
 	// get dir
-	req := httptest.NewRequest("GET", "/files/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/files/", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	body, err := io.ReadAll(w.Result().Body)
@@ -309,7 +311,7 @@ func TestStaticFiles(t *testing.T) {
 	}
 
 	// get file from dir
-	req = httptest.NewRequest("GET", "/files/hello.txt", nil)
+	req = httptest.NewRequest(http.MethodGet, "/files/hello.txt", nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	body, err = io.ReadAll(w.Result().Body)
@@ -321,7 +323,7 @@ func TestStaticFiles(t *testing.T) {
 	}
 
 	// get file directly
-	req = httptest.NewRequest("GET", "/hello", nil)
+	req = httptest.NewRequest(http.MethodGet, "/hello", nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	body, err = io.ReadAll(w.Result().Body)
@@ -337,60 +339,60 @@ func TestStaticFiles(t *testing.T) {
 var content embed.FS
 
 func TestStaticFilesFS(t *testing.T) {
-	router := DefaultRouter()
+	router := NewRouter()
 	router.StaticFS("/files", content)
 	router.ServeFileFS("/hello/", "example/static/hello.txt", content)
 
 	// get dir
 	t.Run("getDir", func(t *testing.T) {
-	req := httptest.NewRequest("GET", "/files/", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	body, err := io.ReadAll(w.Result().Body)
-	if err != nil {
-		t.Error("error reading body", err)
-	}
-	if !strings.Contains(string(body), ">example/</a>") {
-		t.Error("wrong response", string(body))
-	}
-})
+		req := httptest.NewRequest(http.MethodGet, "/files/", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		body, err := io.ReadAll(w.Result().Body)
+		if err != nil {
+			t.Error("error reading body", err)
+		}
+		if !strings.Contains(string(body), ">example/</a>") {
+			t.Error("wrong response", string(body))
+		}
+	})
 
 	// get file from dir
 	t.Run("getFile", func(t *testing.T) {
-	req := httptest.NewRequest("GET", "/files/example/static/hello.txt", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	body, err := io.ReadAll(w.Result().Body)
-	if err != nil {
-		t.Error("error reading body", err)
-	}
-	if !strings.Contains(string(body), "hello world") {
-		t.Error("wrong response", string(body))
-	}
-})
+		req := httptest.NewRequest(http.MethodGet, "/files/example/static/hello.txt", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		body, err := io.ReadAll(w.Result().Body)
+		if err != nil {
+			t.Error("error reading body", err)
+		}
+		if !strings.Contains(string(body), "hello world") {
+			t.Error("wrong response", string(body))
+		}
+	})
 
 	// get file directly
 	t.Run("getFileDirect", func(t *testing.T) {
-	req := httptest.NewRequest("GET", "/hello/", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	body, err := io.ReadAll(w.Result().Body)
-	if err != nil {
-		t.Error("error reading body", err)
-	}
-	if !strings.Contains(string(body), "hello world") {
-		t.Error("wrong response", string(body))
-		t.Log(w.Result().Header)
-	}
-})
+		req := httptest.NewRequest(http.MethodGet, "/hello/", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		body, err := io.ReadAll(w.Result().Body)
+		if err != nil {
+			t.Error("error reading body", err)
+		}
+		if !strings.Contains(string(body), "hello world") {
+			t.Error("wrong response", string(body))
+			t.Log(w.Result().Header)
+		}
+	})
 }
 
 func TestErrorHandling(t *testing.T) {
-	router := NewRouter(slog.Default()).NotAllowed(
+	router := NewRouter().NotAllowed(
 		func(w http.ResponseWriter, _ string, _ int) {
 			http.Error(w, "Custom Method Not Allowed", http.StatusMethodNotAllowed)
 		}).NotFound(
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			io.WriteString(w, "Custom Not Found")
 		})
@@ -426,8 +428,8 @@ func TestErrorHandling(t *testing.T) {
 }
 
 func TestCustomMethod(t *testing.T) {
-	router := DefaultRouter()
-	router.CustomMethod("UPDATE", "/{$}", func(w http.ResponseWriter, r *http.Request) {
+	router := NewRouter()
+	router.CustomMethod("UPDATE", "/{$}", func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "custom method handler")
 	})
 	req := httptest.NewRequest("UPDATE", "/", nil)

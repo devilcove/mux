@@ -4,11 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 )
-
-var logger *slog.Logger
 
 type statusRecorder struct {
 	http.ResponseWriter
@@ -28,20 +25,21 @@ func Logger(next http.Handler) http.Handler {
 		now := time.Now()
 		rec := statusRecorder{w, http.StatusOK}
 		next.ServeHTTP(&rec, r)
-		remote := strings.Split(r.RemoteAddr, ":")[0]
+		// remote := strings.Split(r.RemoteAddr, ":")[0]
+		remote := r.RemoteAddr
 		if r.Header.Get("X-Forwarded-For") != "" {
 			remote = r.Header.Get("X-Forwarded-For")
 		}
 		details := fmt.Sprintf(
-			"%s %s %s %s %d %s %s",
+			"%s %s%s %d %s %s %s",
 			r.Method,
 			r.Host,
 			r.URL.Path,
-			remote,
 			rec.status,
+			remote,
 			time.Since(now).String(),
 			r.UserAgent(),
 		)
-		logger.Info(details)
+		slog.Info(details)
 	})
 }

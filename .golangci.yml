@@ -1,28 +1,34 @@
 version: "2"
 run:
   timeout: 5m
-  tests: false
+  #tests: false
 linters:
   default: all
   disable:
     - depguard
-    - gochecknoglobals
     - noinlineerr
     - nlreturn
+    - paralleltest
+    - testpackage
     - wsl
     - wsl_v5
   settings:
-    exhaustruct:
-      exclude:
-        - net/http.Server
-    varnamelen:
-      ignore-decls:
-        - w http.ResponseWriter
-        - r *http.Request
     errcheck:
       exclude-functions:
         - io.WriteString
         - (net/http.ResponseWriter).Write
+    exhaustruct:
+      allow-empty: true
+      exclude:
+        - net/http.Server
+    goconst:
+      ignore-string-values:
+        - "default router"
+    varnamelen:
+      ignore-decls:
+        - r *http.Request
+        - w http.ResponseWriter
+        - w *httptest.ResponseRecorder
   exclusions:
     generated: lax
     warn-unused: true
@@ -30,7 +36,7 @@ linters:
     #  - comments
     #  - common-false-positives
       - legacy
-    #  - std-error-handling
+      - std-error-handling
 formatters:
   enable:
     - gofumpt

@@ -4,7 +4,6 @@ package main
 import (
 	"io"
 	"log"
-	"log/slog"
 	"net/http"
 	"net/http/pprof"
 
@@ -14,7 +13,7 @@ import (
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	router := mux.NewRouter(slog.Default(), mux.Logger)
+	router := mux.NewRouter(mux.Logger)
 	router.NotFound(notFound).NotAllowed(notAllowed)
 	// router.Use(mux.Logger)
 	router.Get("/{$}", page)

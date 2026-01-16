@@ -17,7 +17,6 @@ type Middleware func(http.Handler) http.Handler
 // Router provides a chain of middlewares and routes.
 type Router struct {
 	*http.ServeMux
-	*slog.Logger
 
 	chain      http.Handler
 	methods    []string
@@ -25,12 +24,11 @@ type Router struct {
 	notAllowed func(http.ResponseWriter, string, int)
 }
 
-// DefaultRouter creates a new Router using the default ServeMux.
-func DefaultRouter() *Router {
+// defaultRouter creates a new Router using the default ServeMux.
+func defaultRouter() *Router {
 	mux := http.NewServeMux()
 	router := &Router{
 		ServeMux:   mux,
-		Logger:     slog.New(slog.DiscardHandler),
 		chain:      mux,
 		methods:    []string{},
 		notFound:   http.NotFound,
@@ -55,7 +53,6 @@ func DefaultRouter() *Router {
 		if len(allowed) != 0 {
 			w.Header().Set("Allow", strings.Join(allowed, ", "))
 			router.notAllowed(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			// http.Error(w, "Custom Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		// http.Error(w, "Custom Not Found", http.StatusNotFound)
@@ -65,12 +62,8 @@ func DefaultRouter() *Router {
 }
 
 // NewRouter creates a new Router with the given middleware applied.
-func NewRouter(l *slog.Logger, middleware ...Middleware) *Router {
-	router := DefaultRouter()
-	if l != nil {
-		router.Logger = l
-		logger = l
-	}
+func NewRouter(middleware ...Middleware) *Router {
+	router := defaultRouter()
 	router.Use(middleware...)
 	return router
 }
@@ -95,10 +88,9 @@ func (router *Router) Group(prefix string, middlewares ...Middleware) *Router {
 		}
 	}
 
-	subRouter := DefaultRouter()
+	subRouter := defaultRouter()
 	subRouter.notFound = router.notFound
 	subRouter.notAllowed = router.notAllowed
-	subRouter.Logger = router.Logger
 	subRouter.Use(middlewares...)
 	router.Handle(prefix+"/", http.StripPrefix(prefix, subRouter))
 	return subRouter
@@ -203,9 +195,9 @@ func (router *Router) Run(addr string) {
 		ReadHeaderTimeout: time.Second,
 		Handler:           router,
 	}
-	router.Info("Starting server:", "Address", addr)
+	slog.Info("Starting server:", "Address", addr)
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-		router.Error("Router.Run: failed to start server: ", "error", err)
+		slog.Error("Router.Run: failed to start server: ", "error", err)
 	}
 }
 
