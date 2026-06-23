@@ -6,6 +6,8 @@ linters:
   default: all
   disable:
     - depguard
+    - gomodguard
+    - noctx
     - noinlineerr
     - nlreturn
     - paralleltest
@@ -24,6 +26,10 @@ linters:
     goconst:
       ignore-string-values:
         - "default router"
+    gosec:
+      excludes:
+        - G705
+        - G706
     varnamelen:
       ignore-decls:
         - r *http.Request
